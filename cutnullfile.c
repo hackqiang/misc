@@ -10,12 +10,21 @@
 
 #define DEFAULT_INTERVAL_SIZE 3*1024
 
-#define READ_SIZE 2048
+
+void dumpfile(const char *src, const char *dest, int offset, int size)
+{
+	char cmd[256] = {0};
+	sprintf(cmd, "dd if=%s of=%s bs=1 skip=%d count=%d", src, dest, offset, size);
+	printf("%s\n",cmd);
+	system(cmd);
+}
+
 
 int main(int argc, char **argv)
 {
-	char readbuf[READ_SIZE]={0};
-	int fd, n, i, intervalsize;
+	char readbuf;
+	char writefilename[32] = {0};
+	int fd, i, intervalsize;
 	int null_count = 0;
 	int block_num = 0;
 	int block_info[20][2] = {{0},{0}};
@@ -34,20 +43,23 @@ int main(int argc, char **argv)
 	block_num++;
 	lseek(fd, 4096, SEEK_CUR);
 	block_info[block_num][0]= 4096;
-
-	while ((n = read(fd, readbuf, READ_SIZE)) > 0) {
-		for (i=0; i<n; i++) {
-			if (readbuf[i] == 0) {
+	dumpfile(argv[1], "b0", 0, 4096);
+	
+	while (read(fd, &readbuf, 1) == 1) {
+			if (readbuf == 0) {
 				null_count++;
 			} else {
 				if (null_count > intervalsize) {
 					block_info[block_num][1] = null_count;
 					block_num++;
-					block_info[block_num][0] = lseek(fd, 0, SEEK_CUR) - READ_SIZE;
+					block_info[block_num][0] = lseek(fd, 0, SEEK_CUR)-1;
+					sprintf(writefilename, "b%d", block_num-1);
+					dumpfile(argv[1], writefilename,
+							 block_info[block_num-1][0],
+							 block_info[block_num][0]-block_info[block_num-1][0]-null_count);
 				}
 				null_count = 0;
 			}
-		}
 	}
 	block_info[block_num+1][0] = lseek(fd, 0, SEEK_END);
 	
