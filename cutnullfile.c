@@ -8,22 +8,21 @@
 #include <fcntl.h>
 #include <stdio.h>
 
-#define INTERVAL_SIZE 3*1024
-#define MAX_BLOCKS 1024
+#define DEFAULT_INTERVAL_SIZE 3*1024
 
+#define READ_SIZE 2048
 
 int main(int argc, char **argv)
 {
-	char readbuf;
-	int fd, intervalsize;
+	char readbuf[READ_SIZE]={0};
+	int fd, n, i, intervalsize;
 	int null_count = 0;
 	int block_num = 0;
-	int block_info[MAX_BLOCKS][2] = {{0},{0}};
+	int block_info[20][2] = {{0},{0}};
 	
-	if (argc ==3)
-		intervalsize = atoi(argv[2]);
-	else
-		intervalsize = INTERVAL_SIZE;	
+	intervalsize = DEFAULT_INTERVAL_SIZE;
+	if (argc == 3)
+		intervalsize = atoi(argv[2]);		
 	
 	fd = open(argv[1], O_RDONLY);
 	if (fd<0) {
@@ -36,22 +35,23 @@ int main(int argc, char **argv)
 	lseek(fd, 4096, SEEK_CUR);
 	block_info[block_num][0]= 4096;
 
-	while (read(fd, &readbuf, 1) == 1) {
-		if (readbuf == 0) {
-			null_count++;
-		} else {
-			if (null_count > intervalsize) {
-				block_info[block_num][1] = null_count;
-				block_num++;
-				block_info[block_num][0] = lseek(fd, 0, SEEK_CUR) - 1;
+	while ((n = read(fd, readbuf, READ_SIZE)) > 0) {
+		for (i=0; i<n; i++) {
+			if (readbuf[i] == 0) {
+				null_count++;
+			} else {
+				if (null_count > intervalsize) {
+					block_info[block_num][1] = null_count;
+					block_num++;
+					block_info[block_num][0] = lseek(fd, 0, SEEK_CUR) - READ_SIZE;
+				}
+				null_count = 0;
 			}
-			null_count = 0;
 		}
 	}
 	block_info[block_num+1][0] = lseek(fd, 0, SEEK_END);
 	
-	
-	int i;
+
 	printf("No.\t\toff\t\tblocksize\tintervalsize\n");
 	for (i=0; i <= block_num; i++)
 		printf("%d\t0x%08x-0x%08x\t%8d\t%8d\n", 
